@@ -1,77 +1,128 @@
 import os
 import matplotlib.pyplot as plt
+import matplotlib
 import numpy as np
 import cv2 as cv
 
+matplotlib.use('TkAgg')
 
-def wybranieObiektu():
+# =====================================================
+# Konfiguracja przestrzeni barw
+# =====================================================
+
+COLOR_SPACES = {
+    "HSV": {
+        "convert": cv.COLOR_BGR2HSV,
+        "channels": [0],            # Hue
+        "ranges": [0, 180],
+        "bins": [180]
+    },
+    "RGB": {
+        "convert": cv.COLOR_BGR2RGB,
+        "channels": [0, 1, 2],      # R, G, B
+        "ranges": [0, 256, 0, 256, 0, 256],
+        "bins": [8, 8, 8]
+    }
+}
+
+# =====================================================
+# Wybór obiektu (ROI)
+# =====================================================
+
+def wybranieObiektu(videoCapture):
     _, frame = videoCapture.read()
-    r = cv.selectROI("ROI", frame);
-    xTopLeft,yTopLeft,w,h = map(int,r)
+    r = cv.selectROI("ROI", frame)
+    x, y, w, h = map(int, r)
     cv.destroyWindow("ROI")
-    return xTopLeft,yTopLeft,w,h
+    return x, y, w, h
 
 
+# =====================================================
+# Śledzenie obiektu (CamShift)
+# =====================================================
 
+def sledzenie(x, y, w, h, videoCapture, color_space="HSV"):
 
-def sledzenie(x, y, w, h, videoCapture):
+    cfg = COLOR_SPACES[color_space]
 
     _, frame = videoCapture.read()
-    frame_rgb = cv.cvtColor(frame, cv.COLOR_BGR2RGB)
-    plt.imshow(frame_rgb)
-    plt.show()
-    #cv.imshow('klatka1',frame)
-    # x = 785
-    # y = 470
-    # w = 89
-    # h = 119
 
     roi = frame[y:y + h, x:x + w]
-    kwadrat = (x, y, w, h)
+    track_window = (x, y, w, h)
 
-    cv.imshow('fura',roi)
+    # --- ROI w wybranej przestrzeni barw ---
+    roi_cs = cv.cvtColor(roi, cfg["convert"])
 
-    hsvRoi = cv.cvtColor(roi,cv.COLOR_BGR2HSV)
-    dolnyLimit = np.array([0, 0, 0])
-    gornyLimit = np.array([179, 255, 255])
+    # Histogram ROI
+    histogramRoi = cv.calcHist(
+        [roi_cs],
+        cfg["channels"],
+        None,
+        cfg["bins"],
+        cfg["ranges"]
+    )
 
-    maska = cv.inRange(hsvRoi,dolnyLimit,gornyLimit)
-    histogramRoi = cv.calcHist([hsvRoi],[0],maska,[180],[0,180])
-    cv.normalize(histogramRoi,histogramRoi,0,255,cv.NORM_MINMAX)
-    odciecie = (cv.TERM_CRITERIA_EPS | cv.TERM_CRITERIA_COUNT,10,1)
-    kolor = (255,0,0)
+    cv.normalize(histogramRoi, histogramRoi, 0, 255, cv.NORM_MINMAX)
 
-    #cv.imshow('hsv obrazek', cv.cvtColor(frame,cv.COLOR_BGR2HSV))
+    # Kryteria CamShift
+    term_criteria = (cv.TERM_CRITERIA_EPS | cv.TERM_CRITERIA_COUNT, 10, 1)
 
-    #cv.imshow('hsv',hsvRoi)
-
-
+    kolor = (255, 0, 0)
 
     while True:
-        xd ,frame = videoCapture.read()
-        if xd == True:
-            hsv = cv.cvtColor(frame,cv.COLOR_BGR2HSV)
-            backProject = cv.calcBackProject([hsv],[0],histogramRoi,[0,180],1)
+        ret, frame = videoCapture.read()
+        if not ret:
+            break
 
-            ret,kwadrat = cv.CamShift(backProject, kwadrat, odciecie)
-            box = cv.boxPoints(ret)
+        frame_cs = cv.cvtColor(frame, cfg["convert"])
 
-            #print(box)
-            frame = cv.polylines(frame, [np.int32(box)], True, kolor, 3)
+        # Backprojection
+        backProject = cv.calcBackProject(
+            [frame_cs],
+            cfg["channels"],
+            histogramRoi,
+            cfg["ranges"],
+            1
+        )
 
-            #cv.imshow('backProj', backProject)
-            #cv.imshow('mask', maska)
+        ret, track_window = cv.CamShift(backProject, track_window, term_criteria)
 
-            cv.imshow('fura',frame)
-            cv.waitKey(15)
+        box = cv.boxPoints(ret)
+        box = np.int32(box)
+
+        frame = cv.polylines(frame, [box], True, kolor, 3)
+
+        cv.putText(
+            frame,
+            f"Color space: {color_space}",
+            (20, 30),
+            cv.FONT_HERSHEY_SIMPLEX,
+            1,
+            (0, 255, 0),
+            2
+        )
+
+        cv.imshow("sledzenie", frame)
+
+        if cv.waitKey(15) & 0xFF == 27:  # ESC
+            break
+
+    videoCapture.release()
+    cv.destroyAllWindows()
 
 
+# =====================================================
+# MAIN
+# =====================================================
 
 if __name__ == "__main__":
+
     root = os.getcwd()
-    video_path = os.path.join(root, 'videa', 'furaNaWsi.mp4')
+    video_path = os.path.join(root, "videa", "furaNaWsi.mp4")
+
     videoCapture = cv.VideoCapture(video_path)
 
-    x,y,w,h = wybranieObiektu()
+    x, y, w, h = wybranieObiektu(videoCapture)
 
-    sledzenie(x,y,w,h, videoCapture)
+    # Wybierz: "HSV", "RGB", "YCbCr"
+    sledzenie(x, y, w, h, videoCapture, color_space="RGB")
