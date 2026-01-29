@@ -37,6 +37,8 @@ COLOR_SPACES = {
     }
 
 }
+import tkinter as tk
+from tkinter import filedialog
 
 # =====================================================
 # Wybór obiektu (ROI)
@@ -133,13 +135,36 @@ def sledzenie(x, y, w, h, videoCapture, color_space="HSV"):
 # =====================================================
 
 if __name__ == "__main__":
-
+##############################
     root = os.getcwd()
     video_path = os.path.join(root, "videa", "furaNaWsi.mp4")
 
+    # katalog, w którym leży main.py
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    video_dir = os.path.join(script_dir, "videa")
+
+    # --- GUI do wyboru pliku ---
+    tk_root = tk.Tk()
+    tk_root.withdraw()
+
+    video_path = filedialog.askopenfilename(
+        title="Wybierz plik wideo do analizy",
+        initialdir=video_dir,
+        filetypes=[("Pliki wideo", "*.mp4")]
+    )
+
+    if not video_path:
+        print("Nie wybrano pliku wideo.")
+        exit()
+
     videoCapture = cv.VideoCapture(video_path)
 
+
     x, y, w, h = wybranieObiektu(videoCapture)
+
+    if not videoCapture.isOpened():
+        print("Nie można otworzyć wybranego wideo.")
+        exit()
 
     # Wybierz: "HSV", "RGB", "YCbCr"
     sledzenie(x, y, w, h, videoCapture, color_space="YCbCr")
