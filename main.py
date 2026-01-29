@@ -61,7 +61,9 @@ def sledzenie(x, y, w, h, videoCapture, color_space="HSV"):
     cfg = COLOR_SPACES[color_space]
 
     _, frame = videoCapture.read()
-
+    if _ == False:
+        print("Nie można wczytać wideo")
+        exit()
     roi = frame[y:y + h, x:x + w]
     track_window = (x, y, w, h)
 
