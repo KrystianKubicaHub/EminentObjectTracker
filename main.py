@@ -8,6 +8,10 @@ from tkinter import filedialog
 WINDOW_NAME = "tracked"
 MAX_WIDTH = 1600
 
+MODELE = {
+    "1": "CamShift",
+    "2": "MeanShift"
+}
 
 def resize_frame(frame, max_width=MAX_WIDTH):
     h, w = frame.shape[:2]
@@ -18,6 +22,22 @@ def resize_frame(frame, max_width=MAX_WIDTH):
     new_w = int(w * scale)
     new_h = int(h * scale)
     return cv.resize(frame, (new_w, new_h), interpolation=cv.INTER_AREA)
+
+
+def wyborModelu():
+    print("\nDostępne modele śledzenia:")
+    print("-------------------------")
+    for k, v in MODELE.items():
+        print(f"{k}. {v}")
+    print("-------------------------")
+
+    wybor = input("Wpisz numer wybranego modelu: ").strip()
+
+    if wybor not in MODELE:
+        print("Niepoprawny wybór modelu.")
+        exit()
+
+    return MODELE[wybor]
 
 
 def wybranieObiektu():
@@ -38,7 +58,7 @@ def wybranieObiektu():
     return xTopLeft, yTopLeft, w, h
 
 
-def sledzenie(x, y, w, h, videoCapture):
+def sledzenie(x, y, w, h, videoCapture, model):
 
     cv.namedWindow(WINDOW_NAME, cv.WINDOW_NORMAL)
 
@@ -57,29 +77,18 @@ def sledzenie(x, y, w, h, videoCapture):
 
     h_channel, s_channel, v_channel = cv.split(hsvRoi)
 
-    h_mean = np.mean(h_channel)
-    h_std = np.std(h_channel)
-    s_mean = np.mean(s_channel)
-    s_std = np.std(s_channel)
-    v_mean = np.mean(v_channel)
-    v_std = np.std(v_channel)
+    h_mean, h_std = np.mean(h_channel), np.std(h_channel)
+    s_mean, s_std = np.mean(s_channel), np.std(s_channel)
+    v_mean, v_std = np.mean(v_channel), np.std(v_channel)
 
     tolerance = 1.5
 
-    h_min = max(0, h_mean - tolerance * h_std)
-    h_max = min(179, h_mean + tolerance * h_std)
-    s_min = max(0, s_mean - tolerance * s_std)
-    s_max = min(255, s_mean + tolerance * s_std)
-    v_min = max(0, v_mean - tolerance * v_std)
-    v_max = min(255, v_mean + tolerance * v_std)
+    h_min, h_max = max(0, h_mean - tolerance * h_std), min(179, h_mean + tolerance * h_std)
+    s_min, s_max = max(0, s_mean - tolerance * s_std), min(255, s_mean + tolerance * s_std)
+    v_min, v_max = max(0, v_mean - tolerance * v_std), min(255, v_mean + tolerance * v_std)
 
     dolnyLimit = np.array([h_min, s_min, v_min])
     gornyLimit = np.array([h_max, s_max, v_max])
-
-    print("Dynamicznie dobrane limity HSV:")
-    print(f"  Hue:        {h_min:.0f} - {h_max:.0f}")
-    print(f"  Saturation: {s_min:.0f} - {s_max:.0f}")
-    print(f"  Value:      {v_min:.0f} - {v_max:.0f}")
 
     maska = cv.inRange(hsvRoi, dolnyLimit, gornyLimit)
     histogramRoi = cv.calcHist([hsvRoi], [0], maska, [180], [0, 180])
@@ -97,9 +106,15 @@ def sledzenie(x, y, w, h, videoCapture):
         hsv = cv.cvtColor(frame, cv.COLOR_BGR2HSV)
         backProject = cv.calcBackProject([hsv], [0], histogramRoi, [0, 180], 1)
 
-        ret, kwadrat = cv.CamShift(backProject, kwadrat, odciecie)
-        box = cv.boxPoints(ret)
-        frame = cv.polylines(frame, [np.int32(box)], True, kolor, 3)
+        if model == "CamShift":
+            ret_box, kwadrat = cv.CamShift(backProject, kwadrat, odciecie)
+            box = cv.boxPoints(ret_box)
+            frame = cv.polylines(frame, [np.int32(box)], True, kolor, 3)
+
+        elif model == "MeanShift":
+            _, kwadrat = cv.meanShift(backProject, kwadrat, odciecie)
+            x, y, w, h = kwadrat
+            frame = cv.rectangle(frame, (x, y), (x + w, y + h), kolor, 3)
 
         cv.imshow(WINDOW_NAME, frame)
         if cv.waitKey(15) & 0xFF == 27:
@@ -130,5 +145,6 @@ if __name__ == "__main__":
         print("Nie można otworzyć wybranego wideo.")
         exit()
 
+    model = wyborModelu()
     x, y, w, h = wybranieObiektu()
-    sledzenie(x, y, w, h, videoCapture)
+    sledzenie(x, y, w, h, videoCapture, model)
