@@ -140,4 +140,4 @@ if __name__ == "__main__":
     x, y, w, h = wybranieObiektu(videoCapture)
 
     # Wybierz: "HSV", "RGB", "YCbCr"
-    sledzenie(x, y, w, h, videoCapture, color_space="LAB")
+    sledzenie(x, y, w, h, videoCapture, color_space="YCbCr")
