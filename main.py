@@ -22,7 +22,20 @@ COLOR_SPACES = {
         "channels": [0, 1, 2],      # R, G, B
         "ranges": [0, 256, 0, 256, 0, 256],
         "bins": [8, 8, 8]
+    },
+    "YCbCr": {
+        "convert": cv.COLOR_BGR2YCrCb,
+        "channels": [1, 2],         # Cb, Cr
+        "ranges": [0, 256, 0, 256],
+        "bins": [32, 32]
+    },
+    "LAB": {
+        "convert": cv.COLOR_BGR2LAB,
+        "channels": [1, 2],     # a, b
+        "ranges": [0, 256, 0, 256],
+        "bins": [32, 32]
     }
+
 }
 
 # =====================================================
@@ -125,4 +138,4 @@ if __name__ == "__main__":
     x, y, w, h = wybranieObiektu(videoCapture)
 
     # Wybierz: "HSV", "RGB", "YCbCr"
-    sledzenie(x, y, w, h, videoCapture, color_space="RGB")
+    sledzenie(x, y, w, h, videoCapture, color_space="LAB")
