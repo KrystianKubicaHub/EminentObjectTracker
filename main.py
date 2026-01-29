@@ -23,14 +23,14 @@ COLOR_SPACES = {
     "3": {
         "name": "YCbCr",
         "convert": cv.COLOR_BGR2YCrCb,
-        "channels": [1, 2],         # Cb, Cr
+        "channels": [1, 2],
         "ranges": [0, 256, 0, 256],
         "bins": [32, 32]
     },
     "4": {
         "name": "LAB",
         "convert": cv.COLOR_BGR2LAB,
-        "channels": [1, 2],     # a, b
+        "channels": [1, 2],
         "ranges": [0, 256, 0, 256],
         "bins": [32, 32]
     }
@@ -43,6 +43,7 @@ MODELE = {
 
 WINDOW_NAME = "tracked"
 MAX_WIDTH = 1600
+
 
 def resize_frame(frame, max_width=MAX_WIDTH):
     h, w = frame.shape[:2]
@@ -91,7 +92,6 @@ def wybranieObiektu(videoCapture):
     cv.namedWindow(WINDOW_NAME, cv.WINDOW_NORMAL)
     cv.resizeWindow(WINDOW_NAME, frame.shape[1], frame.shape[0])
 
-    # fromCenter=False -> zaznaczanie od rogu do rogu
     x, y, w, h = map(
         int,
         cv.selectROI(
@@ -117,6 +117,9 @@ def sledzenie(x, y, w, h, videoCapture, model, color_cfg):
     roi = frame[y:y + h, x:x + w]
     track_window = (x, y, w, h)
 
+    # punkt początkowy (środek ROI)
+    start_center = [x + w // 2, y + h // 2]
+
     roi_cs = cv.cvtColor(roi, color_cfg["convert"])
 
     histogramRoi = cv.calcHist(
@@ -130,6 +133,7 @@ def sledzenie(x, y, w, h, videoCapture, model, color_cfg):
 
     term_criteria = (cv.TERM_CRITERIA_EPS | cv.TERM_CRITERIA_COUNT, 10, 1)
     kolor = (255, 0, 0)
+    tekst_kolor = (0, 0, 0)  # czarny
 
     while True:
         ret, frame = videoCapture.read()
@@ -152,10 +156,30 @@ def sledzenie(x, y, w, h, videoCapture, model, color_cfg):
             box = cv.boxPoints(ret_box)
             frame = cv.polylines(frame, [np.int32(box)], True, kolor, 3)
 
+            cx = int(ret_box[0][0])
+            cy = int(ret_box[0][1])
+
         elif model == "MeanShift":
             _, track_window = cv.meanShift(backProject, track_window, term_criteria)
             x, y, w, h = track_window
             frame = cv.rectangle(frame, (x, y), (x + w, y + h), kolor, 3)
+
+            cx = x + w // 2
+            cy = y + h // 2
+
+        # wektor przesunięcia względem pozycji początkowej
+        dx = cx - start_center[0]
+        dy = cy - start_center[1]
+
+        # rysowanie wektora
+        cv.arrowedLine(
+            frame,
+            start_center,
+            (cx, cy),
+            (0, 0, 255),
+            2,
+            tipLength=0.2
+        )
 
         cv.putText(
             frame,
@@ -163,9 +187,22 @@ def sledzenie(x, y, w, h, videoCapture, model, color_cfg):
             (20, 30),
             cv.FONT_HERSHEY_SIMPLEX,
             0.9,
-            (0, 255, 0),
+            tekst_kolor,
             2
         )
+
+        cv.putText(
+            frame,
+            f"dx={dx}, dy={dy}",
+            (20, 65),
+            cv.FONT_HERSHEY_SIMPLEX,
+            0.9,
+            tekst_kolor,
+            2
+        )
+
+        start_center[0] = cx
+        start_center[1] = cy
 
         cv.imshow(WINDOW_NAME, frame)
         if cv.waitKey(15) & 0xFF == 27:
