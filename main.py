@@ -167,4 +167,4 @@ if __name__ == "__main__":
         exit()
 
     # Wybierz: "HSV", "RGB", "YCbCr"
-    sledzenie(x, y, w, h, videoCapture, color_space="YCbCr")
+    sledzenie(x, y, w, h, videoCapture, color_space="RGB")
