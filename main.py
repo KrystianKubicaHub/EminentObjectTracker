@@ -44,9 +44,11 @@ COLOR_SPACES = {
 
 def wybranieObiektu(videoCapture):
     _, frame = videoCapture.read()
-    r = cv.selectROI("ROI", frame)
+    if _ == False:
+        print("Nie można wczytać wideo")
+        exit()
+    r = cv.selectROI("Select your region of interest", frame)
     x, y, w, h = map(int, r)
-    cv.destroyWindow("ROI")
     return x, y, w, h
 
 
