@@ -2,7 +2,8 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 import cv2 as cv
-
+import tkinter as tk
+from tkinter import filedialog
 
 def wybranieObiektu():
     boolean, frame = videoCapture.read()
@@ -11,7 +12,7 @@ def wybranieObiektu():
         exit()
     region = cv.selectROI("Select your region of interest", frame)
     xTopLeft, yTopLeft, w, h = map(int,region)
-    cv.destroyWindow("ROI")
+    cv.destroyAllWindows()
     return xTopLeft,yTopLeft,w,h
 
 
@@ -94,12 +95,29 @@ def sledzenie(x, y, w, h, videoCapture):
 
 
 if __name__ == "__main__":
-    root = os.getcwd() #example root /Users/krystian.kubica/AndroidStudioProjects/EminentObjectTracker
-   # video_path = os.path.join(root, 'videa', 'furaNaWsi.mp4')
-    video_path = os.path.join(root, 'videa', '4062991-uhd_3840_2160_30fps.mp4')
-   # video_path = os.path.join(root, 'videa', '5845159-uhd_3840_2160_30fps.mp4')
+    # katalog, w którym leży main.py
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    video_dir = os.path.join(script_dir, "videa")
+
+    # --- GUI do wyboru pliku ---
+    tk_root = tk.Tk()
+    tk_root.withdraw()
+
+    video_path = filedialog.askopenfilename(
+        title="Wybierz plik wideo do analizy",
+        initialdir=video_dir,
+        filetypes=[("Pliki wideo", "*.mp4")]
+    )
+
+    if not video_path:
+        print("Nie wybrano pliku wideo.")
+        exit()
+
     videoCapture = cv.VideoCapture(video_path)
 
-    x,y,w,h = wybranieObiektu()
+    if not videoCapture.isOpened():
+        print("Nie można otworzyć wybranego wideo.")
+        exit()
 
-    sledzenie(x,y,w,h, videoCapture)
+    x, y, w, h = wybranieObiektu()
+    sledzenie(x, y, w, h, videoCapture)
