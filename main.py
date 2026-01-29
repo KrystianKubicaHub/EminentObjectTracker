@@ -5,7 +5,7 @@ import cv2 as cv
 import tkinter as tk
 from tkinter import filedialog
 
-WINDOW_NAME = "fura"
+WINDOW_NAME = "tracked"
 MAX_WIDTH = 1600
 
 
