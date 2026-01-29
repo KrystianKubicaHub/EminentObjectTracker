@@ -1,27 +1,55 @@
 import os
-import matplotlib.pyplot as plt
 import numpy as np
 import cv2 as cv
 import tkinter as tk
 from tkinter import filedialog
 
-WINDOW_NAME = "tracked"
-MAX_WIDTH = 1600
+
+COLOR_SPACES = {
+    "1": {
+        "name": "HSV",
+        "convert": cv.COLOR_BGR2HSV,
+        "channels": [0],
+        "ranges": [0, 180],
+        "bins": [180]
+    },
+    "2": {
+        "name": "RGB",
+        "convert": cv.COLOR_BGR2RGB,
+        "channels": [0, 1, 2],
+        "ranges": [0, 256, 0, 256, 0, 256],
+        "bins": [8, 8, 8]
+    },
+    "3": {
+        "name": "YCbCr",
+        "convert": cv.COLOR_BGR2YCrCb,
+        "channels": [1, 2],         # Cb, Cr
+        "ranges": [0, 256, 0, 256],
+        "bins": [32, 32]
+    },
+    "4": {
+        "name": "LAB",
+        "convert": cv.COLOR_BGR2LAB,
+        "channels": [1, 2],     # a, b
+        "ranges": [0, 256, 0, 256],
+        "bins": [32, 32]
+    }
+}
 
 MODELE = {
     "1": "CamShift",
     "2": "MeanShift"
 }
 
+WINDOW_NAME = "tracked"
+MAX_WIDTH = 1600
+
 def resize_frame(frame, max_width=MAX_WIDTH):
     h, w = frame.shape[:2]
     if w <= max_width:
         return frame
-
     scale = max_width / w
-    new_w = int(w * scale)
-    new_h = int(h * scale)
-    return cv.resize(frame, (new_w, new_h), interpolation=cv.INTER_AREA)
+    return cv.resize(frame, (int(w * scale), int(h * scale)), interpolation=cv.INTER_AREA)
 
 
 def wyborModelu():
@@ -31,18 +59,30 @@ def wyborModelu():
         print(f"{k}. {v}")
     print("-------------------------")
 
-    wybor = input("Wpisz numer wybranego modelu: ").strip()
-
+    wybor = input("Wpisz numer modelu: ").strip()
     if wybor not in MODELE:
         print("Niepoprawny wybór modelu.")
         exit()
-
     return MODELE[wybor]
 
 
-def wybranieObiektu():
-    boolean, frame = videoCapture.read()
-    if not boolean:
+def wyborPrzestrzeniBarw():
+    print("\nDostępne przestrzenie barw:")
+    print("-------------------------")
+    for k, v in COLOR_SPACES.items():
+        print(f"{k}. {v['name']}")
+    print("-------------------------")
+
+    wybor = input("Wpisz numer przestrzeni barw: ").strip()
+    if wybor not in COLOR_SPACES:
+        print("Niepoprawny wybór przestrzeni barw.")
+        exit()
+    return COLOR_SPACES[wybor]
+
+
+def wybranieObiektu(videoCapture):
+    ret, frame = videoCapture.read()
+    if not ret:
         print("Nie można wczytać wideo")
         exit()
 
@@ -51,50 +91,44 @@ def wybranieObiektu():
     cv.namedWindow(WINDOW_NAME, cv.WINDOW_NORMAL)
     cv.resizeWindow(WINDOW_NAME, frame.shape[1], frame.shape[0])
 
-    region = cv.selectROI(WINDOW_NAME, frame, fromCenter=False, showCrosshair=True)
-    xTopLeft, yTopLeft, w, h = map(int, region)
+    # fromCenter=False -> zaznaczanie od rogu do rogu
+    x, y, w, h = map(
+        int,
+        cv.selectROI(
+            WINDOW_NAME,
+            frame,
+            fromCenter=False,
+            showCrosshair=True
+        )
+    )
 
     cv.destroyWindow(WINDOW_NAME)
-    return xTopLeft, yTopLeft, w, h
+    return x, y, w, h
 
 
-def sledzenie(x, y, w, h, videoCapture, model):
+def sledzenie(x, y, w, h, videoCapture, model, color_cfg):
 
-    cv.namedWindow(WINDOW_NAME, cv.WINDOW_NORMAL)
-
-    boolean, frame = videoCapture.read()
-    if not boolean:
+    ret, frame = videoCapture.read()
+    if not ret:
         print("Nie można wczytać wideo")
         exit()
 
     frame = resize_frame(frame)
-    cv.resizeWindow(WINDOW_NAME, frame.shape[1], frame.shape[0])
-
     roi = frame[y:y + h, x:x + w]
-    kwadrat = (x, y, w, h)
+    track_window = (x, y, w, h)
 
-    hsvRoi = cv.cvtColor(roi, cv.COLOR_BGR2HSV)
+    roi_cs = cv.cvtColor(roi, color_cfg["convert"])
 
-    h_channel, s_channel, v_channel = cv.split(hsvRoi)
-
-    h_mean, h_std = np.mean(h_channel), np.std(h_channel)
-    s_mean, s_std = np.mean(s_channel), np.std(s_channel)
-    v_mean, v_std = np.mean(v_channel), np.std(v_channel)
-
-    tolerance = 1.5
-
-    h_min, h_max = max(0, h_mean - tolerance * h_std), min(179, h_mean + tolerance * h_std)
-    s_min, s_max = max(0, s_mean - tolerance * s_std), min(255, s_mean + tolerance * s_std)
-    v_min, v_max = max(0, v_mean - tolerance * v_std), min(255, v_mean + tolerance * v_std)
-
-    dolnyLimit = np.array([h_min, s_min, v_min])
-    gornyLimit = np.array([h_max, s_max, v_max])
-
-    maska = cv.inRange(hsvRoi, dolnyLimit, gornyLimit)
-    histogramRoi = cv.calcHist([hsvRoi], [0], maska, [180], [0, 180])
+    histogramRoi = cv.calcHist(
+        [roi_cs],
+        color_cfg["channels"],
+        None,
+        color_cfg["bins"],
+        color_cfg["ranges"]
+    )
     cv.normalize(histogramRoi, histogramRoi, 0, 255, cv.NORM_MINMAX)
 
-    odciecie = (cv.TERM_CRITERIA_EPS | cv.TERM_CRITERIA_COUNT, 10, 1)
+    term_criteria = (cv.TERM_CRITERIA_EPS | cv.TERM_CRITERIA_COUNT, 10, 1)
     kolor = (255, 0, 0)
 
     while True:
@@ -103,23 +137,41 @@ def sledzenie(x, y, w, h, videoCapture, model):
             break
 
         frame = resize_frame(frame)
-        hsv = cv.cvtColor(frame, cv.COLOR_BGR2HSV)
-        backProject = cv.calcBackProject([hsv], [0], histogramRoi, [0, 180], 1)
+        frame_cs = cv.cvtColor(frame, color_cfg["convert"])
+
+        backProject = cv.calcBackProject(
+            [frame_cs],
+            color_cfg["channels"],
+            histogramRoi,
+            color_cfg["ranges"],
+            1
+        )
 
         if model == "CamShift":
-            ret_box, kwadrat = cv.CamShift(backProject, kwadrat, odciecie)
+            ret_box, track_window = cv.CamShift(backProject, track_window, term_criteria)
             box = cv.boxPoints(ret_box)
             frame = cv.polylines(frame, [np.int32(box)], True, kolor, 3)
 
         elif model == "MeanShift":
-            _, kwadrat = cv.meanShift(backProject, kwadrat, odciecie)
-            x, y, w, h = kwadrat
+            _, track_window = cv.meanShift(backProject, track_window, term_criteria)
+            x, y, w, h = track_window
             frame = cv.rectangle(frame, (x, y), (x + w, y + h), kolor, 3)
+
+        cv.putText(
+            frame,
+            f"Model: {model} | Color: {color_cfg['name']}",
+            (20, 30),
+            cv.FONT_HERSHEY_SIMPLEX,
+            0.9,
+            (0, 255, 0),
+            2
+        )
 
         cv.imshow(WINDOW_NAME, frame)
         if cv.waitKey(15) & 0xFF == 27:
             break
 
+    videoCapture.release()
     cv.destroyAllWindows()
 
 
@@ -142,9 +194,10 @@ if __name__ == "__main__":
 
     videoCapture = cv.VideoCapture(video_path)
     if not videoCapture.isOpened():
-        print("Nie można otworzyć wybranego wideo.")
+        print("Nie można otworzyć wideo.")
         exit()
 
     model = wyborModelu()
-    x, y, w, h = wybranieObiektu()
-    sledzenie(x, y, w, h, videoCapture, model)
+    color_cfg = wyborPrzestrzeniBarw()
+    x, y, w, h = wybranieObiektu(videoCapture)
+    sledzenie(x, y, w, h, videoCapture, model, color_cfg)
