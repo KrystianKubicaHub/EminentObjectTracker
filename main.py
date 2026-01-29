@@ -41,6 +41,14 @@ MODELE = {
     "2": "MeanShift"
 }
 
+BACKPROJECT_FILTERS = {
+    "0": {"name": "Brak", "type": None},
+    "1": {"name": "Gaussian", "type": "gaussian"},
+    "2": {"name": "Median", "type": "median"},
+    "3": {"name": "Threshold", "type": "threshold"},
+    "4": {"name": "Morphology", "type": "morph"}
+}
+
 WINDOW_NAME = "tracked"
 MAX_WIDTH = 1600
 
@@ -81,6 +89,18 @@ def wyborPrzestrzeniBarw():
     return COLOR_SPACES[wybor]
 
 
+def wyborFiltracjiBP():
+    print("\nFiltracja Back Projection:")
+    print("-------------------------")
+    for k, v in BACKPROJECT_FILTERS.items():
+        print(f"{k}. {v['name']}")
+    print("-------------------------")
+    wybor = input("Wpisz numer filtracji: ").strip()
+    if wybor not in BACKPROJECT_FILTERS:
+        exit("Niepoprawny wybór filtracji.")
+    return BACKPROJECT_FILTERS[wybor]
+
+
 def wybranieObiektu(videoCapture):
     ret, frame = videoCapture.read()
     if not ret:
@@ -88,7 +108,6 @@ def wybranieObiektu(videoCapture):
         exit()
 
     frame = resize_frame(frame)
-
     cv.namedWindow(WINDOW_NAME, cv.WINDOW_NORMAL)
     cv.resizeWindow(WINDOW_NAME, frame.shape[1], frame.shape[0])
 
@@ -106,7 +125,7 @@ def wybranieObiektu(videoCapture):
     return x, y, w, h
 
 
-def sledzenie(x, y, w, h, videoCapture, model, color_cfg):
+def sledzenie(x, y, w, h, videoCapture, model, color_cfg, bp_filter):
 
     ret, frame = videoCapture.read()
     if not ret:
@@ -120,7 +139,6 @@ def sledzenie(x, y, w, h, videoCapture, model, color_cfg):
 
     # punkt początkowy (środek ROI)
     start_center = [x + w // 2, y + h // 2]
-
     roi_cs = cv.cvtColor(roi, color_cfg["convert"])
 
     histogramRoi = cv.calcHist(
@@ -157,6 +175,16 @@ def sledzenie(x, y, w, h, videoCapture, model, color_cfg):
             color_cfg["ranges"],
             1
         )
+
+        if bp_filter["type"] == "gaussian":
+            backProject = cv.GaussianBlur(backProject, (7, 7), 0)
+        elif bp_filter["type"] == "median":
+            backProject = cv.medianBlur(backProject, 5)
+        elif bp_filter["type"] == "threshold":
+            _, backProject = cv.threshold(backProject, 50, 255, cv.THRESH_BINARY)
+        elif bp_filter["type"] == "morph":
+            kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, (5, 5))
+            backProject = cv.morphologyEx(backProject, cv.MORPH_OPEN, kernel)
 
         if model == "CamShift":
             ret_box, track_window = cv.CamShift(backProject, track_window, term_criteria)
@@ -241,14 +269,8 @@ def sledzenie(x, y, w, h, videoCapture, model, color_cfg):
         if cv.waitKey(15) & 0xFF == 27:
             break
 
-    # ===== WYŚWIETLENIE PEŁNEJ MINIMAPY =====
-    cv.namedWindow("Pelna minimapa", cv.WINDOW_NORMAL)
     cv.imshow("Pelna minimapa", minimap)
-
-    print("Naciśnij dowolny klawisz, aby zakończyć...")
     cv.waitKey(0)
-
-
     videoCapture.release()
     cv.destroyAllWindows()
 
@@ -270,12 +292,9 @@ if __name__ == "__main__":
         print("Nie wybrano pliku wideo.")
         exit()
 
-    videoCapture = cv.VideoCapture(video_path)
-    if not videoCapture.isOpened():
-        print("Nie można otworzyć wideo.")
-        exit()
-
+    cap = cv.VideoCapture(video_path)
     model = wyborModelu()
     color_cfg = wyborPrzestrzeniBarw()
-    x, y, w, h = wybranieObiektu(videoCapture)
-    sledzenie(x, y, w, h, videoCapture, model, color_cfg)
+    bp_filter = wyborFiltracjiBP()
+    x, y, w, h = wybranieObiektu(cap)
+    sledzenie(x, y, w, h, cap, model, color_cfg, bp_filter)
