@@ -116,6 +116,7 @@ def sledzenie(x, y, w, h, videoCapture, model, color_cfg):
     frame = resize_frame(frame)
     roi = frame[y:y + h, x:x + w]
     track_window = (x, y, w, h)
+    h_f, w_f = frame.shape[:2]
 
     # punkt początkowy (środek ROI)
     start_center = [x + w // 2, y + h // 2]
@@ -134,6 +135,12 @@ def sledzenie(x, y, w, h, videoCapture, model, color_cfg):
     term_criteria = (cv.TERM_CRITERIA_EPS | cv.TERM_CRITERIA_COUNT, 10, 1)
     kolor = (255, 0, 0)
     tekst_kolor = (0, 0, 0)  # czarny
+
+    # historia punktów
+    path_points = []
+
+    # minimapa
+    minimap = np.ones((h_f, w_f, 3), dtype=np.uint8) * 255
 
     while True:
         ret, frame = videoCapture.read()
@@ -171,6 +178,8 @@ def sledzenie(x, y, w, h, videoCapture, model, color_cfg):
         dx = cx - start_center[0]
         dy = cy - start_center[1]
 
+        path_points.append((cx, cy)) # dodany ostatni punkt do histori
+
         # rysowanie wektora
         cv.arrowedLine(
             frame,
@@ -201,12 +210,44 @@ def sledzenie(x, y, w, h, videoCapture, model, color_cfg):
             2
         )
 
+        # rysowanie ścieżki na minimapie
+        minimap[:] = 255
+        n = len(path_points)
+
+        for i, p in enumerate(path_points):
+            t = i / max(n - 1, 1)  # zakres 0..1
+            color = (
+                int(255 * t),  # B
+                0,  # G
+                int(255 * (1 - t))  # R
+            )
+            cv.circle(minimap, p, 2, color, -1)
+
+        # wstawienie minimapy
+        scale = 0.25
+        mini = cv.resize(minimap, (int(w_f * scale), int(h_f * scale)))
+
+        y1 = 10
+        y2 = 10 + mini.shape[0]
+        x2 = w_f - 10
+        x1 = x2 - mini.shape[1]
+
+        frame[y1:y2, x1:x2] = mini
+
         start_center[0] = cx
         start_center[1] = cy
 
         cv.imshow(WINDOW_NAME, frame)
         if cv.waitKey(15) & 0xFF == 27:
             break
+
+    # ===== WYŚWIETLENIE PEŁNEJ MINIMAPY =====
+    cv.namedWindow("Pelna minimapa", cv.WINDOW_NORMAL)
+    cv.imshow("Pelna minimapa", minimap)
+
+    print("Naciśnij dowolny klawisz, aby zakończyć...")
+    cv.waitKey(0)
+
 
     videoCapture.release()
     cv.destroyAllWindows()
