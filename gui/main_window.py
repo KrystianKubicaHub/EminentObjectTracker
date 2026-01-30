@@ -262,17 +262,28 @@ class MainWindow(QMainWindow):
             self.start_btn.setEnabled(True)
     
     def start_tracking(self):
+        print("[GUI] start_tracking() called")
         if not self.video_path:
             QMessageBox.warning(self, Strings.ERROR, Strings.NO_VIDEO)
             return
         
+        print(f"[GUI] Video path: {self.video_path}")
         self.selected_model = self.model_combo.currentData()
         self.selected_color_space = self.color_space_combo.currentData()
         self.enable_trace = self.trace_checkbox.isChecked()
         
-        self.tracker = self.create_tracker()
-        if self.tracker is None:
-            QMessageBox.critical(self, Strings.ERROR, "Failed to initialize tracker")
+        print(f"[GUI] Selected model: {self.selected_model}")
+        
+        try:
+            self.tracker = self.create_tracker()
+            print(f"[GUI] Tracker created: {self.tracker}")
+            if self.tracker is None:
+                QMessageBox.critical(self, Strings.ERROR, f"Failed to initialize tracker: {self.selected_model}")
+                return
+        except Exception as e:
+            QMessageBox.critical(self, Strings.ERROR, f"Tracker error: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return
         
         self.video_processor = VideoProcessor(self.video_path, self.tracker, self.enable_trace)
@@ -457,7 +468,17 @@ class MainWindow(QMainWindow):
         self.video_processor.reset()
         first_frame = self.video_processor.read_frame()
         
-        self.tracker.init(first_frame, bbox)
+        try:
+            print(f"[GUI] Initializing tracker with bbox: {bbox}")
+            self.tracker.init(first_frame, bbox)
+            print(f"[GUI] Tracker initialized successfully")
+        except Exception as e:
+            QMessageBox.critical(self, Strings.ERROR, f"Tracker initialization failed: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            self.reset_tracking()
+            return
+        
         self.trace_drawer = TraceDrawer() if self.enable_trace else None
         
         self.status_label.setText(Strings.TRACKING_ACTIVE)

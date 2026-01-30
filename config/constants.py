@@ -28,8 +28,9 @@ class Models:
         "MOSSE": {"supports_color_space": False, "description": "chuj4 "},
         "MIL": {"supports_color_space": False, "description": "chuj5 "},
     }
+    
     DEEP_TRACKERS = {
-        "YOLOv8Missile": {"supports_color_space": False, "description": "chuj "},
+        "YOLOv8": {"supports_color_space": False, "description": "chuj "},
     }
 
 class ColorSpaces:
@@ -42,12 +43,12 @@ class ColorSpaces:
 
 class Strings:
     APP_TITLE = "Eminent Object Tracker"
-    SELECT_VIDEO = "Designate thy visual chronicle"
-    SELECT_MODEL = "Choose thy algorithm of pursuit"
-    SELECT_COLOR_SPACE = "Select chromatic dimension"
-    ENABLE_TRACE = "Inscribe the trajectory"
-    START_TRACKING = "Commence the hunt"
-    SELECT_ROI = "Demarcate region of paramount interest"
-    TRACKING_ACTIVE = "The pursuit is underway"
-    NO_VIDEO = "No visual chronicle was designated"
-    ERROR = "An anomaly has transpired"
+    SELECT_VIDEO = "Select videło"
+    SELECT_MODEL = "select your Boom Boom"
+    SELECT_COLOR_SPACE = "Select Color Space"
+    ENABLE_TRACE = " enable trace or not enable trace"
+    START_TRACKING = "Jazda z kurwami"
+    SELECT_ROI = "Zaznacz kwadrat"
+    TRACKING_ACTIVE = "LEcimy"
+    NO_VIDEO = "No videło"
+    ERROR = "Chuj i chuj"

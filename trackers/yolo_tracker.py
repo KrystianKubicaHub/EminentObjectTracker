@@ -14,16 +14,41 @@ class YOLOTracker(BaseTracker):
         self.bbox = bbox
         x, y, w, h = bbox
         cx, cy = x + w/2, y + h/2
+        
+        print(f"[YOLO] Initializing with bbox: {bbox}")
         results = self.model.track(frame, persist=True, verbose=False)
         
+        print(f"[YOLO] Results: {results}")
         if results and len(results) > 0 and results[0].boxes is not None:
             boxes = results[0].boxes
+            print(f"[YOLO] Boxes detected: {len(boxes)}")
+            print(f"[YOLO] Boxes.id: {boxes.id}")
+            
             if boxes.id is not None:
+                min_dist = float('inf')
+                closest_idx = None
+                
                 for i, box in enumerate(boxes.xywh):
                     bx, by = box[0].item(), box[1].item()
-                    if abs(bx - cx) < w and abs(by - cy) < h:
-                        self.track_id = int(boxes.id[i].item())
-                        break
+                    dist = ((bx - cx)**2 + (by - cy)**2)**0.5
+                    print(f"[YOLO] Box {i}: center=({bx}, {by}), distance from ROI center: {dist:.1f}")
+                    
+                    if dist < min_dist:
+                        min_dist = dist
+                        closest_idx = i
+                
+                if closest_idx is not None:
+                    self.track_id = int(boxes.id[closest_idx].item())
+                    print(f"[YOLO] Using closest object (distance: {min_dist:.1f}px) with track_id: {self.track_id}")
+                    return
+            else:
+                print("[YOLO] WARNING: No track IDs in first frame")
+        else:
+            print("[YOLO] WARNING: No boxes detected in first frame")
+        
+        if self.track_id is None:
+            print("[YOLO] ERROR: Failed to initialize - no object found")
+            raise Exception("YOLO could not detect any object in the video")
         
     def update(self, frame):
         results = self.model.track(frame, persist=True, verbose=False)
