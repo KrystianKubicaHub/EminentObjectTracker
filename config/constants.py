@@ -26,6 +26,7 @@ class Sizes:
 class Models:
     OPENCV_TRACKERS = {
         "CamShift": {"supports_color_space": True, "description": "chuj "},
+        "MeanShift": {"supports_color_space": True, "description": "Mean Shift algorithm"},
         "CSRT": {"supports_color_space": True, "description": "chuj2 "},
         "KCF": {"supports_color_space": True, "description": "chuj3 "},
         "MOSSE": {"supports_color_space": False, "description": "chuj4 "},

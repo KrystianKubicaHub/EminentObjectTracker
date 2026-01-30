@@ -11,6 +11,7 @@ from utils.roi_selector import ROISelector
 from utils.trace_drawer import TraceDrawer
 from utils.video_processor import VideoProcessor
 from trackers.camshift_tracker import CamShiftTracker
+from trackers.meanshift_tracker import MeanShiftTracker
 from trackers.csrt_tracker import CSRTTracker
 from trackers.kcf_tracker import KCFTracker
 from trackers.mosse_tracker import MOSSETracker
@@ -24,7 +25,19 @@ class MainWindow(QMainWindow):
         
         icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets", "appIcon.png")
         if os.path.exists(icon_path):
-            self.setWindowIcon(QIcon(icon_path))
+            icon_img = cv.imread(icon_path, cv.IMREAD_UNCHANGED)
+            if icon_img is not None:
+                if icon_img.shape[2] == 3:
+                    gray = cv.cvtColor(icon_img, cv.COLOR_BGR2GRAY)
+                    _, alpha = cv.threshold(gray, 250, 255, cv.THRESH_BINARY_INV)
+                    icon_img = cv.cvtColor(icon_img, cv.COLOR_BGR2BGRA)
+                    icon_img[:, :, 3] = alpha
+                
+                temp_icon_path = os.path.join(os.path.dirname(icon_path), "temp_icon.png")
+                cv.imwrite(temp_icon_path, icon_img)
+                self.setWindowIcon(QIcon(temp_icon_path))
+            else:
+                self.setWindowIcon(QIcon(icon_path))
         
         self.resize(Sizes.WINDOW_WIDTH, Sizes.WINDOW_HEIGHT)
         self.showMaximized()
@@ -425,6 +438,8 @@ class MainWindow(QMainWindow):
         
         if model_name == "CamShift":
             return CamShiftTracker(color_space)
+        elif model_name == "MeanShift":
+            return MeanShiftTracker(color_space)
         elif model_name == "CSRT":
             return CSRTTracker(color_space)
         elif model_name == "KCF":
