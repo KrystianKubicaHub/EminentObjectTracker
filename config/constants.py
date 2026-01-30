@@ -61,3 +61,7 @@ class Strings:
     SELECT_VIDEO_FIRST = "← Select a video file to begin"
     ERROR = "Error"
     NO_VIDEO = "No video selected"
+    BENCHMARK_MODE = "Benchmark All Models"
+    BENCHMARK_RUNNING = "Benchmarking in progress..."
+    BENCHMARK_COMPLETE = "Benchmark complete"
+    EXPORT_RESULTS = "Export Results"

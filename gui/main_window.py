@@ -3,13 +3,16 @@ import os
 import cv2 as cv
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                                QHBoxLayout, QPushButton, QComboBox, QLabel, 
-                               QFileDialog, QCheckBox, QFrame, QMessageBox)
-from PySide6.QtCore import Qt, QTimer, Signal, QPoint, QRect
-from PySide6.QtGui import QImage, QPixmap, QFont, QPainter, QPen, QIcon
+                               QFileDialog, QCheckBox, QFrame, QMessageBox, 
+                               QProgressBar, QScrollArea, QTextEdit, QTableWidget, 
+                               QTableWidgetItem, QHeaderView)
+from PySide6.QtCore import Qt, QTimer, Signal, QPoint, QRect, QThread
+from PySide6.QtGui import QImage, QPixmap, QFont, QPainter, QPen, QIcon, QColor
 from config.constants import Colors, Sizes, Models, ColorSpaces, Strings
 from utils.roi_selector import ROISelector
 from utils.trace_drawer import TraceDrawer
 from utils.video_processor import VideoProcessor
+from utils.benchmark import BenchmarkEngine
 from trackers.camshift_tracker import CamShiftTracker
 from trackers.meanshift_tracker import MeanShiftTracker
 from trackers.csrt_tracker import CSRTTracker
@@ -57,6 +60,8 @@ class MainWindow(QMainWindow):
         self.temp_frame = None
         self.is_tracking = False
         self.is_paused = False
+        self.benchmark_mode = False
+        self.benchmark_roi = None
         
         self.init_ui()
         self.apply_dark_theme()
@@ -68,11 +73,11 @@ class MainWindow(QMainWindow):
         main_layout.setSpacing(0)
         main_layout.setContentsMargins(0, 0, 0, 0)
         
-        sidebar = self.create_sidebar()
-        main_layout.addWidget(sidebar)
+        self.sidebar = self.create_sidebar()
+        main_layout.addWidget(self.sidebar)
         
-        video_area = QWidget()
-        video_layout = QVBoxLayout(video_area)
+        self.video_area = QWidget()
+        video_layout = QVBoxLayout(self.video_area)
         video_layout.setContentsMargins(0, 0, 0, 0)
         
         self.video_label = QLabel()
@@ -121,8 +126,8 @@ class MainWindow(QMainWindow):
         video_layout.addLayout(controls_layout)
         video_layout.addSpacing(20)
         
-        main_layout.addWidget(video_area, 1)
-        
+        main_layout.addWidget(self.video_area, 1)
+    
     def create_sidebar(self):
         sidebar = QFrame()
         sidebar.setFixedWidth(Sizes.SIDEBAR_WIDTH)
@@ -133,20 +138,20 @@ class MainWindow(QMainWindow):
             }}
         """)
         
-        layout = QVBoxLayout(sidebar)
-        layout.setSpacing(20)
-        layout.setContentsMargins(20, 30, 20, 30)
+        self.sidebar_layout = QVBoxLayout(sidebar)
+        self.sidebar_layout.setSpacing(20)
+        self.sidebar_layout.setContentsMargins(20, 30, 20, 30)
         
         title = QLabel(Strings.APP_TITLE)
         title.setFont(QFont("Arial", 18, QFont.Bold))
         title.setStyleSheet(f"color: {Colors.PRIMARY.name()}; border: none;")
         title.setAlignment(Qt.AlignCenter)
-        layout.addWidget(title)
+        self.sidebar_layout.addWidget(title)
         
-        layout.addSpacing(20)
+        self.sidebar_layout.addSpacing(20)
         
         self.video_btn = self.create_button(Strings.SELECT_VIDEO, self.select_video)
-        layout.addWidget(self.video_btn)
+        self.sidebar_layout.addWidget(self.video_btn)
         
         self.thumbnail_label = QLabel()
         self.thumbnail_label.setFixedHeight(Sizes.THUMBNAIL_HEIGHT)
@@ -157,18 +162,18 @@ class MainWindow(QMainWindow):
             border-radius: 6px;
         """)
         self.thumbnail_label.hide()
-        layout.addWidget(self.thumbnail_label)
+        self.sidebar_layout.addWidget(self.thumbnail_label)
         
         self.video_info = QLabel("No video selected")
         self.video_info.setStyleSheet(f"color: {Colors.TEXT_SECONDARY.name()}; font-size: 10px; border: none;")
         self.video_info.setWordWrap(True)
-        layout.addWidget(self.video_info)
+        self.sidebar_layout.addWidget(self.video_info)
         
-        layout.addSpacing(10)
+        self.sidebar_layout.addSpacing(10)
         
-        model_label = QLabel(Strings.SELECT_MODEL)
-        model_label.setStyleSheet(f"color: {Colors.TEXT.name()}; font-weight: bold; border: none;")
-        layout.addWidget(model_label)
+        self.model_label = QLabel(Strings.SELECT_MODEL)
+        self.model_label.setStyleSheet(f"color: {Colors.TEXT.name()}; font-weight: bold; border: none;")
+        self.sidebar_layout.addWidget(self.model_label)
         
         self.model_combo = QComboBox()
         all_models = {**Models.OPENCV_TRACKERS, **Models.DEEP_TRACKERS}
@@ -176,28 +181,29 @@ class MainWindow(QMainWindow):
             self.model_combo.addItem(f"{model_name}", model_name)
         self.model_combo.currentTextChanged.connect(self.on_model_changed)
         self.style_combo(self.model_combo)
-        layout.addWidget(self.model_combo)
+        self.sidebar_layout.addWidget(self.model_combo)
         
         self.model_desc = QLabel()
         self.model_desc.setStyleSheet(f"color: {Colors.TEXT_SECONDARY.name()}; font-size: 10px; border: none; font-style: italic;")
         self.model_desc.setWordWrap(True)
-        layout.addWidget(self.model_desc)
+        self.sidebar_layout.addWidget(self.model_desc)
         
-        layout.addSpacing(10)
+        self.sidebar_layout.addSpacing(10)
         
         self.color_space_label = QLabel(Strings.SELECT_COLOR_SPACE)
         self.color_space_label.setStyleSheet(f"color: {Colors.TEXT.name()}; font-weight: bold; border: none;")
-        layout.addWidget(self.color_space_label)
+        self.sidebar_layout.addWidget(self.color_space_label)
         
         self.color_space_combo = QComboBox()
         for cs_name in ColorSpaces.AVAILABLE.keys():
             self.color_space_combo.addItem(cs_name, cs_name)
         self.style_combo(self.color_space_combo)
-        layout.addWidget(self.color_space_combo)
+        self.sidebar_layout.addWidget(self.color_space_combo)
         
-        layout.addSpacing(10)
+        self.sidebar_layout.addSpacing(10)
         
         self.trace_checkbox = QCheckBox(Strings.ENABLE_TRACE)
+        self.trace_checkbox.stateChanged.connect(lambda: self.trace_options.setVisible(self.trace_checkbox.isChecked()))
         self.trace_checkbox.setStyleSheet(f"""
             QCheckBox {{
                 color: {Colors.TEXT.name()};
@@ -224,10 +230,10 @@ class MainWindow(QMainWindow):
                 font-weight: bold;
             }}
         """)
-        layout.addWidget(self.trace_checkbox)
+        self.sidebar_layout.addWidget(self.trace_checkbox)
         
-        trace_options = QWidget()
-        trace_options_layout = QVBoxLayout(trace_options)
+        self.trace_options = QWidget()
+        trace_options_layout = QVBoxLayout(self.trace_options)
         trace_options_layout.setContentsMargins(20, 0, 0, 0)
         trace_options_layout.setSpacing(8)
         
@@ -259,20 +265,46 @@ class MainWindow(QMainWindow):
         self.style_combo(self.trace_thickness_combo)
         trace_options_layout.addWidget(self.trace_thickness_combo)
         
-        layout.addWidget(trace_options)
+        self.trace_options.setVisible(False)
+        self.sidebar_layout.addWidget(self.trace_options)
         
-        layout.addSpacing(20)
+        self.sidebar_layout.addSpacing(20)
         
         self.start_btn = self.create_button(Strings.START_TRACKING, self.start_tracking)
         self.start_btn.setEnabled(False)
-        layout.addWidget(self.start_btn)
+        self.sidebar_layout.addWidget(self.start_btn)
+        
+        self.benchmark_btn = self.create_button(Strings.BENCHMARK_MODE, self.start_benchmark_mode)
+        self.benchmark_btn.setEnabled(False)
+        self.benchmark_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {Colors.WARNING.name()};
+                color: {Colors.BACKGROUND.name()};
+                border: none;
+                border-radius: 6px;
+                padding: 12px;
+                font-size: 13px;
+                font-weight: bold;
+            }}
+            QPushButton:hover {{
+                background-color: {Colors.ACCENT.name()};
+            }}
+            QPushButton:pressed {{
+                background-color: {Colors.PRIMARY.name()};
+            }}
+            QPushButton:disabled {{
+                background-color: {Colors.SURFACE.name()};
+                color: {Colors.TEXT_SECONDARY.name()};
+            }}
+        """)
+        self.sidebar_layout.addWidget(self.benchmark_btn)
         
         self.status_label = QLabel("")
         self.status_label.setStyleSheet(f"color: {Colors.SUCCESS.name()}; font-size: 11px; border: none;")
         self.status_label.setWordWrap(True)
-        layout.addWidget(self.status_label)
+        self.sidebar_layout.addWidget(self.status_label)
         
-        layout.addStretch()
+        self.sidebar_layout.addStretch()
         
         self.on_model_changed(self.model_combo.currentText())
         
@@ -369,6 +401,7 @@ class MainWindow(QMainWindow):
             filename = os.path.basename(file_path)
             self.video_info.setText(f"Video: {filename}")
             self.start_btn.setEnabled(True)
+            self.benchmark_btn.setEnabled(True)
             
             cap = cv.VideoCapture(file_path)
             ret, frame = cap.read()
@@ -541,6 +574,8 @@ class MainWindow(QMainWindow):
         self.video_label.setText(Strings.SELECT_VIDEO_FIRST)
         self.start_btn.setVisible(True)
         self.start_btn.setEnabled(True if self.video_path else False)
+        self.benchmark_btn.setVisible(True)
+        self.benchmark_btn.setEnabled(True if self.video_path else False)
         self.video_btn.setEnabled(True)
         self.model_combo.setEnabled(True)
         self.color_space_combo.setEnabled(True)
@@ -557,6 +592,8 @@ class MainWindow(QMainWindow):
         self.status_label.setText("")
         self.start_btn.setVisible(True)
         self.start_btn.setEnabled(True if self.video_path else False)
+        self.benchmark_btn.setVisible(True)
+        self.benchmark_btn.setEnabled(True if self.video_path else False)
         self.video_btn.setEnabled(True)
         self.model_combo.setEnabled(True)
         self.color_space_combo.setEnabled(True)
@@ -652,16 +689,27 @@ class MainWindow(QMainWindow):
         
         if w < 5 or h < 5:
             QMessageBox.warning(self, Strings.ERROR, "Region too small")
-            self.reset_tracking()
+            if self.benchmark_mode:
+                self.cancel_benchmark()
+            else:
+                self.reset_tracking()
             return
         
         frame_h, frame_w = self.temp_frame.shape[:2]
         if x < 0 or y < 0 or x + w > frame_w or y + h > frame_h:
             QMessageBox.warning(self, Strings.ERROR, "Region outside frame bounds")
-            self.reset_tracking()
+            if self.benchmark_mode:
+                self.cancel_benchmark()
+            else:
+                self.reset_tracking()
             return
         
         bbox = (x, y, w, h)
+        
+        if self.benchmark_mode:
+            self.benchmark_roi = bbox
+            self.run_benchmark()
+            return
         
         self.roi_mode = False
         self.video_label.removeEventFilter(self)
@@ -698,6 +746,402 @@ class MainWindow(QMainWindow):
             self.video_processor.release()
         cv.destroyAllWindows()
         event.accept()
+    
+    def show_normal_mode(self):
+        self.benchmark_mode = False
+        
+        if hasattr(self, 'back_btn') and self.back_btn:
+            self.sidebar_layout.removeWidget(self.back_btn)
+            self.back_btn.deleteLater()
+            self.back_btn = None
+        
+        self.video_area.setVisible(True)
+        self.video_label.setVisible(True)
+        self.video_label.setText(Strings.SELECT_VIDEO_FIRST if not self.video_path else "")
+        self.video_label.setStyleSheet(f"background-color: {Colors.BACKGROUND.name()}; border: none; font-size: 18px; color: {Colors.TEXT_SECONDARY.name()};")
+        
+        self.video_btn.setVisible(True)
+        self.video_btn.setEnabled(True)
+        self.thumbnail_label.setVisible(True if self.video_path else False)
+        self.video_info.setVisible(True)
+        
+        self.model_label.setVisible(True)
+        self.model_combo.setVisible(True)
+        self.model_combo.setEnabled(True)
+        self.model_desc.setVisible(True)
+        
+        current_model = self.model_combo.currentText()
+        supports_color_space = Models.OPENCV_TRACKERS.get(current_model, {}).get('supports_color_space', False) or \
+                              Models.DEEP_TRACKERS.get(current_model, {}).get('supports_color_space', False)
+        self.color_space_label.setVisible(supports_color_space)
+        self.color_space_combo.setVisible(supports_color_space)
+        self.color_space_combo.setEnabled(True)
+        
+        self.trace_checkbox.setVisible(True)
+        self.trace_checkbox.setEnabled(True)
+        self.trace_options.setVisible(self.trace_checkbox.isChecked())
+        self.trace_color_combo.setEnabled(True)
+        self.trace_thickness_combo.setEnabled(True)
+        
+        self.start_btn.setVisible(True)
+        self.start_btn.setEnabled(True if self.video_path else False)
+        self.benchmark_btn.setVisible(True)
+        self.benchmark_btn.setEnabled(True if self.video_path else False)
+        
+        self.status_label.setText("")
+        self.status_label.setStyleSheet(f"color: {Colors.SUCCESS.name()}; font-size: 11px; border: none;")
+    
+    def show_benchmark_mode(self):
+        self.benchmark_mode = True
+        
+        self.back_btn = self.create_button("← Back to Menu", self.cancel_benchmark)
+        self.back_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {Colors.SURFACE.name()};
+                color: {Colors.TEXT.name()};
+                border: 2px solid {Colors.PRIMARY.name()};
+                border-radius: 8px;
+                padding: 12px;
+                font-size: 13px;
+                font-weight: bold;
+            }}
+            QPushButton:hover {{
+                background-color: {Colors.PRIMARY.name()};
+                color: white;
+            }}
+        """)
+        self.sidebar_layout.insertWidget(1, self.back_btn)
+        
+        self.video_area.setVisible(True)
+        self.video_label.setVisible(True)
+        self.video_label.setText("")
+        self.video_label.setStyleSheet("")
+        
+        self.video_btn.setVisible(False)
+        self.model_label.setVisible(False)
+        self.model_combo.setVisible(False)
+        self.model_desc.setVisible(False)
+        self.color_space_label.setVisible(False)
+        self.color_space_combo.setVisible(False)
+        self.trace_checkbox.setVisible(False)
+        self.trace_options.setVisible(False)
+        self.start_btn.setVisible(False)
+        self.benchmark_btn.setVisible(False)
+        
+        self.status_label.setText("Select ROI to start crazy benchmark you really want to see!")
+        self.status_label.setVisible(True)
+        self.status_label.setStyleSheet(f"color: {Colors.WARNING.name()}; font-size: 14px; font-weight: bold; border: none;")
+    
+    def start_benchmark_mode(self):
+        if not self.video_path:
+            QMessageBox.warning(self, Strings.ERROR, Strings.NO_VIDEO)
+            return
+        
+        self.show_benchmark_mode()
+        
+        capture = cv.VideoCapture(self.video_path)
+        ret, first_frame = capture.read()
+        capture.release()
+        
+        if not ret:
+            QMessageBox.critical(self, Strings.ERROR, "Cannot read video")
+            self.cancel_benchmark()
+            return
+        
+        self.temp_frame = first_frame.copy()
+        self.roi_mode = True
+        self.roi_start = None
+        self.roi_end = None
+        
+        self.status_label.setText("Draw rectangle to select tracking region")
+        self.display_frame(first_frame)
+        self.video_label.installEventFilter(self)
+    
+    def run_benchmark(self):
+        self.video_label.removeEventFilter(self)
+        self.roi_mode = False
+        
+        progress_widget = QFrame()
+        progress_widget.setStyleSheet(f"background-color: {Colors.BACKGROUND.name()};")
+        progress_layout = QVBoxLayout(progress_widget)
+        progress_layout.setContentsMargins(40, 40, 40, 40)
+        progress_layout.setSpacing(20)
+        
+        logo_label = QLabel()
+        icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets", "appIcon.png")
+        if os.path.exists(icon_path):
+            pixmap = QPixmap(icon_path)
+            scaled_pixmap = pixmap.scaled(200, 200, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            logo_label.setPixmap(scaled_pixmap)
+            logo_label.setAlignment(Qt.AlignCenter)
+        progress_layout.addWidget(logo_label)
+        
+        title_label = QLabel("Benchmark in Progress")
+        title_label.setFont(QFont("Arial", 24, QFont.Bold))
+        title_label.setStyleSheet(f"color: {Colors.PRIMARY.name()};")
+        title_label.setAlignment(Qt.AlignCenter)
+        progress_layout.addWidget(title_label)
+        
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setStyleSheet(f"""
+            QProgressBar {{
+                border: 2px solid {Colors.PRIMARY.name()};
+                border-radius: 5px;
+                text-align: center;
+                color: {Colors.TEXT.name()};
+                background-color: {Colors.SURFACE.name()};
+            }}
+            QProgressBar::chunk {{
+                background-color: {Colors.PRIMARY.name()};
+            }}
+        """)
+        progress_layout.addWidget(self.progress_bar)
+        
+        self.progress_label = QLabel("Initializing...")
+        self.progress_label.setStyleSheet(f"color: {Colors.TEXT.name()}; font-size: 14px;")
+        self.progress_label.setAlignment(Qt.AlignCenter)
+        self.progress_label.setWordWrap(True)
+        progress_layout.addWidget(self.progress_label)
+        
+        progress_layout.addSpacing(20)
+        
+        self.cancel_benchmark_btn = QPushButton("Cancel Benchmark")
+        self.cancel_benchmark_btn.clicked.connect(self.cancel_benchmark)
+        self.cancel_benchmark_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {Colors.ERROR.name()};
+                color: {Colors.TEXT.name()};
+                padding: 12px;
+                border-radius: 6px;
+                font-size: 13px;
+                font-weight: bold;
+            }}
+            QPushButton:hover {{
+                background-color: {Colors.WARNING.name()};
+            }}
+        """)
+        progress_layout.addWidget(self.cancel_benchmark_btn)
+        
+        progress_layout.addStretch()
+        
+        self.video_label.clear()
+        self.video_label.setText("")
+        self.video_label.setStyleSheet(f"background-color: {Colors.BACKGROUND.name()}; border: none;")
+        central_widget = self.centralWidget()
+        main_layout = central_widget.layout()
+        
+        for i in reversed(range(main_layout.count())):
+            widget = main_layout.itemAt(i).widget()
+            if widget and widget not in (self.video_label, self.sidebar, self.video_area):
+                widget.setVisible(False)
+        
+        main_layout.addWidget(progress_widget)
+        
+        all_models = self.create_all_trackers()
+        
+        self.benchmark_engine = BenchmarkEngine(self.video_path, self.benchmark_roi, all_models)
+        
+        def progress_callback(current, total, message):
+            progress = int((current / total) * 100)
+            self.progress_bar.setValue(progress)
+            self.progress_label.setText(f"{message}\nProgress: {current}/{total} configurations")
+            QApplication.processEvents()
+        
+        try:
+            results = self.benchmark_engine.run_benchmark(progress_callback)
+            self.show_benchmark_results()
+        except Exception as e:
+            QMessageBox.critical(self, Strings.ERROR, f"Benchmark failed: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            self.cancel_benchmark()
+    
+    def create_all_trackers(self):
+        trackers = []
+        
+        for color_space in ["HSV", "RGB", "YCbCr", "LAB"]:
+            trackers.append((f"CamShift ({color_space})", CamShiftTracker(color_space)))
+        
+        for color_space in ["HSV", "RGB", "YCbCr", "LAB"]:
+            trackers.append((f"MeanShift ({color_space})", MeanShiftTracker(color_space)))
+        
+        trackers.append(("CSRT", CSRTTracker()))
+        trackers.append(("KCF", KCFTracker()))
+        trackers.append(("MOSSE", MOSSETracker()))
+        trackers.append(("MIL", MILTracker()))
+        trackers.append(("YOLOv8", YOLOTracker()))
+        
+        return trackers
+    
+    def show_benchmark_results(self):
+        results_widget = QFrame()
+        results_widget.setStyleSheet(f"background-color: {Colors.BACKGROUND.name()};")
+        results_layout = QVBoxLayout(results_widget)
+        results_layout.setContentsMargins(40, 40, 40, 40)
+        results_layout.setSpacing(20)
+        
+        title = QLabel(Strings.BENCHMARK_COMPLETE)
+        title.setFont(QFont("Arial", 24, QFont.Bold))
+        title.setStyleSheet(f"color: {Colors.SUCCESS.name()};")
+        title.setAlignment(Qt.AlignCenter)
+        results_layout.addWidget(title)
+        
+        summary = self.benchmark_engine.get_error_summary()
+        total_configs = len(summary)
+        best_model = summary[0] if summary else None
+        avg_pos = sum(item['mse_position'] for item in summary) / total_configs if total_configs else 0
+        avg_area = sum(item['mse_area'] for item in summary) / total_configs if total_configs else 0
+        
+        cards_layout = QHBoxLayout()
+        cards_layout.setSpacing(16)
+        
+        def make_card(title_text, value_text, color):
+            card = QFrame()
+            card.setStyleSheet(f"""
+                QFrame {{
+                    background-color: {Colors.SURFACE.name()};
+                    border: 2px solid {Colors.PRIMARY.name()};
+                    border-radius: 10px;
+                    padding: 12px;
+                }}
+            """)
+            card_layout = QVBoxLayout(card)
+            card_layout.setSpacing(6)
+            
+            title_label = QLabel(title_text)
+            title_label.setStyleSheet(f"color: {Colors.TEXT_SECONDARY.name()}; font-size: 11px; border: none;")
+            value_label = QLabel(value_text)
+            value_label.setStyleSheet(f"color: {color}; font-size: 16px; font-weight: bold; border: none;")
+            
+            card_layout.addWidget(title_label)
+            card_layout.addWidget(value_label)
+            return card
+        
+        best_name = best_model['model'] if best_model else "-"
+        cards_layout.addWidget(make_card("Best model", best_name, Colors.SUCCESS.name()))
+        cards_layout.addWidget(make_card("Avg position RMSE", f"{avg_pos:.2f} px", Colors.ACCENT.name()))
+        cards_layout.addWidget(make_card("Avg area RMSE", f"{avg_area:.2f} px²", Colors.WARNING.name()))
+        results_layout.addLayout(cards_layout)
+        
+        table = QTableWidget(total_configs, 4)
+        table.setHorizontalHeaderLabels(["Rank", "Model", "Position RMSE (px)", "Area RMSE (px²)"])
+        table.setSortingEnabled(False)
+        table.setAlternatingRowColors(True)
+        table.setSelectionBehavior(QTableWidget.SelectRows)
+        table.setEditTriggers(QTableWidget.NoEditTriggers)
+        table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        table.verticalHeader().setVisible(False)
+        table.setShowGrid(True)
+        table.setStyleSheet(f"""
+            QTableWidget {{
+                background-color: {Colors.SURFACE.name()};
+                color: {Colors.TEXT.name()};
+                border: 2px solid {Colors.PRIMARY.name()};
+                border-radius: 8px;
+                gridline-color: {Colors.PRIMARY.name()};
+                font-size: 12px;
+            }}
+            QTableWidget::item {{
+                color: {Colors.TEXT.name()};
+                background-color: {Colors.SURFACE.name()};
+            }}
+            QTableWidget::item:alternate {{
+                background-color: {Colors.BACKGROUND.name()};
+            }}
+            QHeaderView::section {{
+                background-color: {Colors.BACKGROUND.name()};
+                color: {Colors.TEXT.name()};
+                border: none;
+                padding: 6px;
+                font-weight: bold;
+            }}
+            QTableWidget::item:selected {{
+                background-color: {Colors.PRIMARY.name()};
+                color: white;
+            }}
+        """)
+        
+        medal_colors = [QColor(255, 215, 0), QColor(192, 192, 192), QColor(205, 127, 50)]
+        default_color = Colors.TEXT.name()
+        for i, model_info in enumerate(summary):
+            rank_item = QTableWidgetItem(str(i + 1))
+            model_item = QTableWidgetItem(model_info['model'])
+            pos_item = QTableWidgetItem(f"{model_info['mse_position']:.2f}")
+            area_item = QTableWidgetItem(f"{model_info['mse_area']:.2f}")
+            
+            for item in (rank_item, model_item, pos_item, area_item):
+                item.setTextAlignment(Qt.AlignCenter)
+                item.setForeground(QColor(default_color))
+                if i < 3:
+                    item.setForeground(medal_colors[i])
+            
+            table.setItem(i, 0, rank_item)
+            table.setItem(i, 1, model_item)
+            table.setItem(i, 2, pos_item)
+            table.setItem(i, 3, area_item)
+
+        table.setSortingEnabled(True)
+        
+        results_layout.addWidget(table, 1)
+        
+        buttons_layout = QHBoxLayout()
+        
+        export_btn = self.create_button(Strings.EXPORT_RESULTS, self.export_benchmark_results)
+        buttons_layout.addWidget(export_btn)
+        
+        done_btn = self.create_button("Done", self.cancel_benchmark)
+        buttons_layout.addWidget(done_btn)
+        
+        results_layout.addLayout(buttons_layout)
+        
+        self.video_area.setVisible(False)
+        self.video_label.clear()
+        self.video_label.setStyleSheet(f"background-color: {Colors.BACKGROUND.name()}; border: none;")
+        central_widget = self.centralWidget()
+        main_layout = central_widget.layout()
+        
+        for i in reversed(range(main_layout.count())):
+            widget = main_layout.itemAt(i).widget()
+            if widget and widget not in (self.video_label, self.sidebar, self.video_area):
+                widget.setVisible(False)
+                main_layout.removeWidget(widget)
+                widget.deleteLater()
+        
+        main_layout.addWidget(results_widget)
+    
+    def export_benchmark_results(self):
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Export Benchmark Results",
+            "benchmark_results.json",
+            "JSON Files (*.json)"
+        )
+        
+        if file_path:
+            try:
+                output_path = self.benchmark_engine.export_to_json(file_path)
+                QMessageBox.information(self, "Success", f"Results exported to:\n{output_path}")
+            except Exception as e:
+                QMessageBox.critical(self, Strings.ERROR, f"Failed to export: {str(e)}")
+    
+    def cancel_benchmark(self):
+        self.benchmark_roi = None
+        self.roi_mode = False
+        self.roi_start = None
+        self.roi_end = None
+        self.temp_frame = None
+        
+        central_widget = self.centralWidget()
+        main_layout = central_widget.layout()
+        
+        for i in reversed(range(main_layout.count())):
+            widget = main_layout.itemAt(i).widget()
+            if widget and widget not in (self.video_label, self.sidebar, self.video_area):
+                widget.setVisible(False)
+                main_layout.removeWidget(widget)
+                widget.deleteLater()
+        
+        self.show_normal_mode()
 
 def run_application():
     app = QApplication(sys.argv)
