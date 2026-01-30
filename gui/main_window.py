@@ -5,7 +5,7 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                                QHBoxLayout, QPushButton, QComboBox, QLabel, 
                                QFileDialog, QCheckBox, QFrame, QMessageBox)
 from PySide6.QtCore import Qt, QTimer, Signal, QPoint, QRect
-from PySide6.QtGui import QImage, QPixmap, QFont, QPainter, QPen
+from PySide6.QtGui import QImage, QPixmap, QFont, QPainter, QPen, QIcon
 from config.constants import Colors, Sizes, Models, ColorSpaces, Strings
 from utils.roi_selector import ROISelector
 from utils.trace_drawer import TraceDrawer
@@ -21,7 +21,13 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle(Strings.APP_TITLE)
+        
+        icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets", "appIcon.png")
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
+        
         self.resize(Sizes.WINDOW_WIDTH, Sizes.WINDOW_HEIGHT)
+        self.showMaximized()
         
         self.video_path = None
         self.selected_model = None
@@ -36,6 +42,8 @@ class MainWindow(QMainWindow):
         self.roi_start = None
         self.roi_end = None
         self.temp_frame = None
+        self.is_tracking = False
+        self.is_paused = False
         
         self.init_ui()
         self.apply_dark_theme()
@@ -56,15 +64,48 @@ class MainWindow(QMainWindow):
         
         self.video_label = QLabel()
         self.video_label.setAlignment(Qt.AlignCenter)
-        self.video_label.setStyleSheet(f"background-color: {Colors.BACKGROUND.name()}; border: none;")
-        self.video_label.setText("Awaiting visual chronicle...")
+        self.video_label.setStyleSheet(f"background-color: {Colors.BACKGROUND.name()}; border: none; font-size: 18px; color: {Colors.TEXT_SECONDARY.name()};")
+        self.video_label.setText(Strings.SELECT_VIDEO_FIRST)
         self.video_label.setMouseTracking(True)
         video_layout.addWidget(self.video_label, 1)
         
-        self.reset_btn = self.create_button("Reset the chronicle", self.reset_tracking)
+        controls_layout = QHBoxLayout()
+        controls_layout.addStretch()
+        
+        self.pause_resume_btn = self.create_button(Strings.STOP_TRACKING, self.toggle_pause)
+        self.pause_resume_btn.setVisible(False)
+        self.pause_resume_btn.setMaximumWidth(200)
+        controls_layout.addWidget(self.pause_resume_btn)
+        
+        self.cancel_btn = self.create_button("Cancel", self.cancel_tracking)
+        self.cancel_btn.setVisible(False)
+        self.cancel_btn.setMaximumWidth(200)
+        self.cancel_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {Colors.ERROR.name()};
+                color: {Colors.TEXT.name()};
+                border: none;
+                border-radius: 6px;
+                padding: 12px;
+                font-size: 13px;
+                font-weight: bold;
+            }}
+            QPushButton:hover {{
+                background-color: {Colors.WARNING.name()};
+            }}
+            QPushButton:pressed {{
+                background-color: {Colors.ERROR.name()};
+            }}
+        """)
+        controls_layout.addWidget(self.cancel_btn)
+        
+        self.reset_btn = self.create_button("Reset", self.reset_tracking)
         self.reset_btn.setVisible(False)
-        self.reset_btn.setMaximumWidth(300)
-        video_layout.addWidget(self.reset_btn, 0, Qt.AlignCenter)
+        self.reset_btn.setMaximumWidth(200)
+        controls_layout.addWidget(self.reset_btn)
+        
+        controls_layout.addStretch()
+        video_layout.addLayout(controls_layout)
         video_layout.addSpacing(20)
         
         main_layout.addWidget(video_area, 1)
@@ -94,7 +135,18 @@ class MainWindow(QMainWindow):
         self.video_btn = self.create_button(Strings.SELECT_VIDEO, self.select_video)
         layout.addWidget(self.video_btn)
         
-        self.video_info = QLabel("No chronicle selected")
+        self.thumbnail_label = QLabel()
+        self.thumbnail_label.setFixedHeight(Sizes.THUMBNAIL_HEIGHT)
+        self.thumbnail_label.setAlignment(Qt.AlignCenter)
+        self.thumbnail_label.setStyleSheet(f"""
+            background-color: {Colors.BACKGROUND.name()};
+            border: 2px solid {Colors.PRIMARY.name()};
+            border-radius: 6px;
+        """)
+        self.thumbnail_label.hide()
+        layout.addWidget(self.thumbnail_label)
+        
+        self.video_info = QLabel("No video selected")
         self.video_info.setStyleSheet(f"color: {Colors.TEXT_SECONDARY.name()}; font-size: 10px; border: none;")
         self.video_info.setWordWrap(True)
         layout.addWidget(self.video_info)
@@ -137,20 +189,64 @@ class MainWindow(QMainWindow):
             QCheckBox {{
                 color: {Colors.TEXT.name()};
                 border: none;
-                spacing: 8px;
+                spacing: 10px;
+                font-size: 13px;
             }}
             QCheckBox::indicator {{
-                width: 18px;
-                height: 18px;
+                width: 20px;
+                height: 20px;
                 border: 2px solid {Colors.PRIMARY.name()};
-                border-radius: 3px;
-                background-color: {Colors.SURFACE.name()};
+                border-radius: 4px;
+                background-color: {Colors.BACKGROUND.name()};
             }}
             QCheckBox::indicator:checked {{
                 background-color: {Colors.PRIMARY.name()};
+                image: url(none);
+                border: 2px solid {Colors.PRIMARY.name()};
+            }}
+            QCheckBox::indicator:checked:after {{
+                content: "✓";
+                color: white;
+                font-size: 16px;
+                font-weight: bold;
             }}
         """)
         layout.addWidget(self.trace_checkbox)
+        
+        trace_options = QWidget()
+        trace_options_layout = QVBoxLayout(trace_options)
+        trace_options_layout.setContentsMargins(20, 0, 0, 0)
+        trace_options_layout.setSpacing(8)
+        
+        color_label = QLabel(Strings.TRACE_COLOR)
+        color_label.setStyleSheet(f"color: {Colors.TEXT_SECONDARY.name()}; font-size: 11px; border: none;")
+        trace_options_layout.addWidget(color_label)
+        
+        self.trace_color_combo = QComboBox()
+        self.trace_color_combo.addItem("Purple", (138, 43, 226))
+        self.trace_color_combo.addItem("Red", (255, 0, 0))
+        self.trace_color_combo.addItem("Green", (0, 255, 0))
+        self.trace_color_combo.addItem("Blue", (0, 0, 255))
+        self.trace_color_combo.addItem("Yellow", (255, 255, 0))
+        self.trace_color_combo.addItem("Cyan", (0, 255, 255))
+        self.trace_color_combo.addItem("White", (255, 255, 255))
+        self.style_combo(self.trace_color_combo)
+        trace_options_layout.addWidget(self.trace_color_combo)
+        
+        thickness_label = QLabel(Strings.TRACE_THICKNESS)
+        thickness_label.setStyleSheet(f"color: {Colors.TEXT_SECONDARY.name()}; font-size: 11px; border: none;")
+        trace_options_layout.addWidget(thickness_label)
+        
+        self.trace_thickness_combo = QComboBox()
+        self.trace_thickness_combo.addItem("Thin (1px)", 1)
+        self.trace_thickness_combo.addItem("Normal (2px)", 2)
+        self.trace_thickness_combo.addItem("Thick (3px)", 3)
+        self.trace_thickness_combo.addItem("Very Thick (5px)", 5)
+        self.trace_thickness_combo.setCurrentIndex(1)
+        self.style_combo(self.trace_thickness_combo)
+        trace_options_layout.addWidget(self.trace_thickness_combo)
+        
+        layout.addWidget(trace_options)
         
         layout.addSpacing(20)
         
@@ -258,8 +354,21 @@ class MainWindow(QMainWindow):
         if file_path:
             self.video_path = file_path
             filename = os.path.basename(file_path)
-            self.video_info.setText(f"Chronicle: {filename}")
+            self.video_info.setText(f"Video: {filename}")
             self.start_btn.setEnabled(True)
+            
+            cap = cv.VideoCapture(file_path)
+            ret, frame = cap.read()
+            if ret:
+                frame = cv.resize(frame, (Sizes.SIDEBAR_WIDTH - 40, Sizes.THUMBNAIL_HEIGHT - 4))
+                rgb_frame = cv.cvtColor(frame, cv.COLOR_BGR2RGB)
+                h, w, ch = rgb_frame.shape
+                bytes_per_line = ch * w
+                qt_image = QImage(rgb_frame.data, w, h, bytes_per_line, QImage.Format_RGB888)
+                pixmap = QPixmap.fromImage(qt_image)
+                self.thumbnail_label.setPixmap(pixmap)
+                self.thumbnail_label.show()
+            cap.release()
     
     def start_tracking(self):
         print("[GUI] start_tracking() called")
@@ -301,10 +410,10 @@ class MainWindow(QMainWindow):
         self.roi_start = None
         self.roi_end = None
         
-        self.status_label.setText("Draw rectangle on video to select region")
+        self.status_label.setText("Draw rectangle on video to select object")
         self.display_frame(first_frame)
         self.video_label.installEventFilter(self)
-        self.start_btn.setEnabled(False)
+        self.start_btn.setVisible(False)
         self.video_btn.setEnabled(False)
         self.model_combo.setEnabled(False)
         self.color_space_combo.setEnabled(False)
@@ -329,6 +438,9 @@ class MainWindow(QMainWindow):
         return None
     
     def update_frame(self):
+        if self.is_paused:
+            return
+            
         frame = self.video_processor.read_frame()
         if frame is None:
             self.stop_tracking()
@@ -346,6 +458,16 @@ class MainWindow(QMainWindow):
         
         self.display_frame(frame)
     
+    def toggle_pause(self):
+        if self.is_paused:
+            self.is_paused = False
+            self.pause_resume_btn.setText(Strings.STOP_TRACKING)
+            self.status_label.setText(Strings.TRACKING_ACTIVE)
+        else:
+            self.is_paused = True
+            self.pause_resume_btn.setText(Strings.RESUME_TRACKING)
+            self.status_label.setText("Tracking paused")
+    
     def display_frame(self, frame):
         rgb_frame = cv.cvtColor(frame, cv.COLOR_BGR2RGB)
         h, w, ch = rgb_frame.shape
@@ -362,27 +484,80 @@ class MainWindow(QMainWindow):
     
     def stop_tracking(self):
         self.timer.stop()
+        self.is_tracking = False
+        self.is_paused = False
         if self.video_processor:
             self.video_processor.release()
         
-        self.status_label.setText("Chronicle concluded")
+        self.status_label.setText("Tracking complete - click Start or Reset")
+        self.pause_resume_btn.setVisible(False)
+        self.cancel_btn.setVisible(False)
         self.reset_btn.setVisible(True)
-    
-    def reset_tracking(self):
-        self.reset_btn.setVisible(False)
-        self.video_label.setText("Awaiting visual chronicle...")
-        self.status_label.setText("")
+        self.start_btn.setVisible(True)
         self.start_btn.setEnabled(True)
         self.video_btn.setEnabled(True)
         self.model_combo.setEnabled(True)
         self.color_space_combo.setEnabled(True)
         self.trace_checkbox.setEnabled(True)
+        self.trace_color_combo.setEnabled(True)
+        self.trace_thickness_combo.setEnabled(True)
+    
+    def cancel_tracking(self):
+        self.timer.stop()
+        self.is_tracking = False
+        self.is_paused = False
+        if self.video_processor:
+            self.video_processor.release()
+            self.video_processor = None
+        
+        self.tracker = None
+        self.trace_drawer = None
+        self.roi_mode = False
+        self.roi_start = None
+        self.roi_end = None
+        self.temp_frame = None
+        
+        self.status_label.setText("Tracking cancelled")
+        self.pause_resume_btn.setVisible(False)
+        self.cancel_btn.setVisible(False)
+        self.reset_btn.setVisible(False)
+        self.video_label.setText(Strings.SELECT_VIDEO_FIRST)
+        self.start_btn.setVisible(True)
+        self.start_btn.setEnabled(True if self.video_path else False)
+        self.video_btn.setEnabled(True)
+        self.model_combo.setEnabled(True)
+        self.color_space_combo.setEnabled(True)
+        self.trace_checkbox.setEnabled(True)
+        self.trace_color_combo.setEnabled(True)
+        self.trace_thickness_combo.setEnabled(True)
+    
+    def reset_tracking(self):
+        self.timer.stop()
+        self.pause_resume_btn.setVisible(False)
+        self.cancel_btn.setVisible(False)
+        self.reset_btn.setVisible(False)
+        self.video_label.setText(Strings.SELECT_VIDEO_FIRST)
+        self.status_label.setText("")
+        self.start_btn.setVisible(True)
+        self.start_btn.setEnabled(True if self.video_path else False)
+        self.video_btn.setEnabled(True)
+        self.model_combo.setEnabled(True)
+        self.color_space_combo.setEnabled(True)
+        self.trace_checkbox.setEnabled(True)
+        self.trace_color_combo.setEnabled(True)
+        self.trace_thickness_combo.setEnabled(True)
         
         if self.video_processor:
             self.video_processor.release()
             self.video_processor = None
         self.tracker = None
         self.trace_drawer = None
+        self.is_tracking = False
+        self.is_paused = False
+        self.roi_mode = False
+        self.roi_start = None
+        self.roi_end = None
+        self.temp_frame = None
     
     def eventFilter(self, obj, event):
         if obj == self.video_label and self.roi_mode:
@@ -479,9 +654,16 @@ class MainWindow(QMainWindow):
             self.reset_tracking()
             return
         
-        self.trace_drawer = TraceDrawer() if self.enable_trace else None
+        trace_color = self.trace_color_combo.currentData()
+        trace_thickness = self.trace_thickness_combo.currentData()
+        self.trace_drawer = TraceDrawer(trace_color, trace_thickness) if self.enable_trace else None
         
         self.status_label.setText(Strings.TRACKING_ACTIVE)
+        self.is_tracking = True
+        self.is_paused = False
+        self.pause_resume_btn.setText(Strings.STOP_TRACKING)
+        self.pause_resume_btn.setVisible(True)
+        self.cancel_btn.setVisible(True)
         self.timer.start(int(1000 / 30))
     
     def closeEvent(self, event):
@@ -493,6 +675,11 @@ class MainWindow(QMainWindow):
 
 def run_application():
     app = QApplication(sys.argv)
+    
+    icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets", "appIcon.png")
+    if os.path.exists(icon_path):
+        app.setWindowIcon(QIcon(icon_path))
+    
     window = MainWindow()
     window.show()
     sys.exit(app.exec())

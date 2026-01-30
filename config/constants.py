@@ -13,12 +13,15 @@ class Colors:
     ERROR = QColor(244, 67, 54)
     TRACKER_BOX = (255, 0, 0)
     TRACE_LINE = (138, 43, 226)
+    TRACE_THICKNESS = 2
 
 class Sizes:
     WINDOW_WIDTH = 1400
     WINDOW_HEIGHT = 900
     VIDEO_MAX_WIDTH = 1600
     SIDEBAR_WIDTH = 350
+    THUMBNAIL_HEIGHT = 200
+    MAX_TRACE_POINTS = 5000
 
 class Models:
     OPENCV_TRACKERS = {
@@ -43,12 +46,19 @@ class ColorSpaces:
 
 class Strings:
     APP_TITLE = "Eminent Object Tracker"
-    SELECT_VIDEO = "Select videło"
-    SELECT_MODEL = "select your Boom Boom"
+    SELECT_VIDEO = "Select Video"
+    SELECT_MODEL = "Select Tracking Algorithm"
     SELECT_COLOR_SPACE = "Select Color Space"
-    ENABLE_TRACE = " enable trace or not enable trace"
-    START_TRACKING = "Jazda z kurwami"
-    SELECT_ROI = "Zaznacz kwadrat"
-    TRACKING_ACTIVE = "LEcimy"
+    ENABLE_TRACE = "Enable trajectory trace"
+    TRACE_COLOR = "Trace Color"
+    TRACE_THICKNESS = "Trace Thickness"
+    START_TRACKING = "Start Tracking"
+    STOP_TRACKING = "Pause"
+    RESUME_TRACKING = "Resume"
+    SELECT_ROI = "Draw rectangle on video to select object"
+    TRACKING_ACTIVE = "Tracking in progress..."
+    NO_VIDEO = "Please select a video file first"
+    SELECT_VIDEO_FIRST = "← Select a video file to begin"
+    ERROR = "Error"
     NO_VIDEO = "No videło"
     ERROR = "Chuj i chuj"
