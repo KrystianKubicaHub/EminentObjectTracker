@@ -46,10 +46,6 @@ class VideoProcessor:
         if isinstance(result, tuple) and len(result) == 4:
             x, y, w, h = map(int, result)
             cv.rectangle(frame, (x, y), (x+w, y+h), Colors.TRACKER_BOX, 3)
-        else:
-            box = cv.boxPoints(result)
-            box = np.int32(box)
-            cv.polylines(frame, [box], True, Colors.TRACKER_BOX, 3)
         
         return frame
     

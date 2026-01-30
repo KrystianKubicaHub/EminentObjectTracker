@@ -10,6 +10,10 @@ class YOLOTracker(BaseTracker):
         self.model = YOLO('yolov8n.pt')
         self.track_id = None
         
+    def reset(self):
+        self.track_id = None
+        self.model.predictor = None
+        
     def init(self, frame, bbox):
         self.bbox = bbox
         x, y, w, h = bbox

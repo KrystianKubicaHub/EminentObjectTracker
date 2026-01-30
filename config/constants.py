@@ -25,12 +25,12 @@ class Sizes:
 
 class Models:
     OPENCV_TRACKERS = {
-        "CamShift": {"supports_color_space": True, "description": "chuj "},
-        "MeanShift": {"supports_color_space": True, "description": "Mean Shift algorithm"},
-        "CSRT": {"supports_color_space": True, "description": "chuj2 "},
-        "KCF": {"supports_color_space": True, "description": "chuj3 "},
-        "MOSSE": {"supports_color_space": False, "description": "chuj4 "},
-        "MIL": {"supports_color_space": False, "description": "chuj5 "},
+        "CamShift": {"supports_color_space": True, "description": "Color histogram with rotation"},
+        "MeanShift": {"supports_color_space": True, "description": "Color histogram tracking"},
+        "CSRT": {"supports_color_space": False, "description": "Discriminative correlation filter"},
+        "KCF": {"supports_color_space": False, "description": "Kernelized correlation filter"},
+        "MOSSE": {"supports_color_space": False, "description": "Fast correlation filter"},
+        "MIL": {"supports_color_space": False, "description": "Multiple instance learning"},
     }
     
     DEEP_TRACKERS = {
@@ -58,8 +58,6 @@ class Strings:
     RESUME_TRACKING = "Resume"
     SELECT_ROI = "Draw rectangle on video to select object"
     TRACKING_ACTIVE = "Tracking in progress..."
-    NO_VIDEO = "Please select a video file first"
     SELECT_VIDEO_FIRST = "← Select a video file to begin"
     ERROR = "Error"
-    NO_VIDEO = "No videło"
-    ERROR = "Chuj i chuj"
+    NO_VIDEO = "No video selected"

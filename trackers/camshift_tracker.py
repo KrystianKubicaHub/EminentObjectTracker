@@ -21,8 +21,7 @@ class CamShiftTracker(BaseTracker):
         cfg = ColorSpaces.AVAILABLE.get(self.color_space, ColorSpaces.AVAILABLE["HSV"])
         
         if self.color_space == "HSV":
-            hsv_roi = cv.cvtColor(roi, cv.COLOR_BGR2HSV)
-            h_channel, s_channel, v_channel = cv.split(hsv_roi)
+            h_channel, s_channel, v_channel = cv.split(roi_converted)
             
             h_mean, h_std = np.mean(h_channel), np.std(h_channel)
             s_mean, s_std = np.mean(s_channel), np.std(s_channel)
@@ -40,8 +39,8 @@ class CamShiftTracker(BaseTracker):
                 min(255, v_mean + tolerance * v_std)
             ])
             
-            mask = cv.inRange(hsv_roi, lower_bound, upper_bound)
-            self.histogram = cv.calcHist([hsv_roi], [0], mask, [180], [0, 180])
+            mask = cv.inRange(roi_converted, lower_bound, upper_bound)
+            self.histogram = cv.calcHist([roi_converted], [0], mask, [180], [0, 180])
         else:
             self.histogram = cv.calcHist(
                 [roi_converted],
@@ -73,6 +72,9 @@ class CamShiftTracker(BaseTracker):
         ret, self.track_window = cv.CamShift(back_project, self.track_window, term_criteria)
         
         if ret[0][0] > 0 and ret[0][1] > 0:
-            self.bbox = self.track_window
-            return True, ret
+            (cx, cy), (w, h), angle = ret
+            x = int(cx - w/2)
+            y = int(cy - h/2)
+            self.bbox = (x, y, int(w), int(h))
+            return True, self.bbox
         return False, None

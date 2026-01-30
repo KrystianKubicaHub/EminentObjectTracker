@@ -525,6 +525,8 @@ class MainWindow(QMainWindow):
             self.video_processor.release()
             self.video_processor = None
         
+        if self.tracker and hasattr(self.tracker, 'reset'):
+            self.tracker.reset()
         self.tracker = None
         self.trace_drawer = None
         self.roi_mode = False
@@ -565,6 +567,9 @@ class MainWindow(QMainWindow):
         if self.video_processor:
             self.video_processor.release()
             self.video_processor = None
+        
+        if self.tracker and hasattr(self.tracker, 'reset'):
+            self.tracker.reset()
         self.tracker = None
         self.trace_drawer = None
         self.is_tracking = False
@@ -647,6 +652,12 @@ class MainWindow(QMainWindow):
         
         if w < 5 or h < 5:
             QMessageBox.warning(self, Strings.ERROR, "Region too small")
+            self.reset_tracking()
+            return
+        
+        frame_h, frame_w = self.temp_frame.shape[:2]
+        if x < 0 or y < 0 or x + w > frame_w or y + h > frame_h:
+            QMessageBox.warning(self, Strings.ERROR, "Region outside frame bounds")
             self.reset_tracking()
             return
         
