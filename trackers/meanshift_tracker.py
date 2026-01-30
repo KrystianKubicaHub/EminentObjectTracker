@@ -41,4 +41,5 @@ class MeanShiftTracker(BaseTracker):
         ret, self.track_window = cv.meanShift(dst, self.track_window, self.term_crit)
         
         x, y, w, h = self.track_window
-        return True, (x, y, w, h)
+        self.bbox = (x, y, w, h)
+        return True, self.bbox

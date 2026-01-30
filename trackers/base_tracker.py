@@ -23,7 +23,7 @@ class BaseTracker(ABC):
         return (int(x + w/2), int(y + h/2))
     
     def convert_frame(self, frame):
-        if not self.supports_color_space or self.color_space is None or self.color_space == "RGB":
+        if not self.supports_color_space or self.color_space is None:
             return frame
         
         from config.constants import ColorSpaces
