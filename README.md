@@ -1,45 +1,33 @@
 # Eminent Object Tracker
 
-## What is this thing?
+## What is it?
 
-This project emerged from the chaotic depths of a university assignment. Its primary objective? To fabricate a sophisticated application that facilitates the comparison of diverse tracking algorithms for object tracking in video sequences. 
+This project was created under chaotic circumstances during a university assignment. Its main goal was to create a military-space-scientific-genius-project-clever application that would facilitate the comparison of various object tracking algorithms in video sequences. 
 
-The application enables testing of multiple tracking methodologies, with some supporting advanced color space transformations for enhanced performance. You can draw a rectangle on your video like a kindergartner with a crayon, and then watch the magic happen.
+The application allows you to test multiple tracking methods, and for models using different colour spaces, you can also change the colour spaces. Anka also implements drawing the path of an object tracked in a static video.
 
-### Supported Tracking Models
+### Supported tracking models
 
-**Histogram-Based Trackers** (support color space selection):
-- **CamShift** - Color histogram with rotation tracking
-  - Supports: HSV, RGB, YCbCr, LAB color spaces
-- **MeanShift** - Color histogram tracking without rotation
-  - Supports: HSV, RGB, YCbCr, LAB color spaces
+**Histogram-based tracking** (supports colour space selection):
+- **CamShift** - colour histogram with rotation tracking
+  - Supports: HSV, RGB, YCbCr, LAB colour spaces
+- **MeanShift** - colour histogram tracking without rotation
+  — Supports: HSV, RGB, YCbCr, LAB colour spaces
 
-**Correlation Filter Trackers**:
-- **CSRT** - Discriminative Correlation Filter with Spatial Reliability
-- **KCF** - Kernelized Correlation Filter
-- **MOSSE** - Minimum Output Sum of Squared Error (fast but basic)
-- **MIL** - Multiple Instance Learning tracker
+**Correlation filter-based tracking**:
+- **CSRT** — discriminative correlation filter with spatial reliability
+- **KCF** — kernel correlation filter
+- **MOSSE** — minimum sum of squared output errors (fast but basic)
+- **MIL** — multiple learning tracker
 
-**Deep Learning Trackers**:
-- **YOLOv8** - State-of-the-art object detection with ByteTrack
-  - Automatically downloads model on first run
-  - Supports persistent tracking across frames
-
-### Features That Actually Work
-
-- **Color Space Selection** - For CamShift and MeanShift (HSV, RGB, YCbCr, LAB)
-- **Interactive ROI Selection** - Draw rectangle directly on video frame
-- **Pause/Resume** - Because sometimes you need a break
-- **Trajectory Traces** - Visualize object path with customizable color and thickness
-- **Cancel Button** - When everything goes to shit and you want to start over
-- **Dark Theme** - Your eyes will thank you
-- **Video Thumbnail Preview** - See what you're working with
+**Deep learning trackers**:
+- **YOLOv8** — state-of-the-art object detection with ByteTrack
 
 ## How to Run This Beast
 
 ### Installation
 
-First, install all the dependencies. This might take a while, so grab a coffee or contemplate your life choices:
+First, launch that amazing app.
 
 ```bash
 pip3 install -r requirements.txt
@@ -54,19 +42,14 @@ The requirements include:
 
 ### Running the Application
 
-After installation is complete and your existential crisis has subsided:
+After installation:
 
 ```bash
 python3 main.py
 ```
 
-### Requirements
 
-- Python 3.9 or higher
-- macOS / Linux / Windows (tested on macOS M4 Pro)
-- Webcam or video files for testing
-- Patience (especially with YOLO model download on first run)
 
----
+**Note**: This is a student project. Expect bugs, weird behavior, and occasional moments of brilliance. If something breaks, that is a feature, not a bug.
 
-**Note**: This is a student project. Expect bugs, weird behavior, and occasional moments of brilliance. If something breaks, that's a feature, not a bug.
+We wish you very Good day
