@@ -40,7 +40,7 @@ class Models:
 class ColorSpaces:
     AVAILABLE = {
         "HSV": {"convert": "COLOR_BGR2HSV", "channels": [0], "ranges": [0, 180], "bins": [180]},
-        "RGB": {"convert": "COLOR_BGR2RGB", "channels": [0, 1, 2], "ranges": [0, 256, 0, 256, 0, 256], "bins": [8, 8, 8]},
+        "RGB": {"convert": "COLOR_BGR2RGB", "channels": [0, 1], "ranges": [0, 256, 0, 256], "bins": [32, 32]},
         "YCbCr": {"convert": "COLOR_BGR2YCrCb", "channels": [1, 2], "ranges": [0, 256, 0, 256], "bins": [32, 32]},
         "LAB": {"convert": "COLOR_BGR2LAB", "channels": [1, 2], "ranges": [0, 256, 0, 256], "bins": [32, 32]},
     }
